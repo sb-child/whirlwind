@@ -484,7 +484,7 @@ where
     ///     assert!(pairs.contains(&(&"baz", &"qux")));
     /// });
     /// ```
-    pub async fn iter(&self) -> ShardIter<K, V> {
+    pub async fn iter(&'_ self) -> ShardIter<'_, K, V> {
         let guard_futures = self.inner.iter().map(|shard| shard.read());
         let guards = join_all(guard_futures).await;
         ShardIter::new(guards)
@@ -598,7 +598,7 @@ where
     ///     assert_eq!(map.get(&"baz").await.unwrap().value(), &"qux");
     /// });
     /// ```
-    pub async fn iter_mut(&self) -> ShardIterMut<K, V> {
+    pub async fn iter_mut(&'_ self) -> ShardIterMut<'_, K, V> {
         let guard_futures = self.inner.iter().map(|shard| shard.write());
         let guards = join_all(guard_futures).await;
         ShardIterMut::new(guards)
