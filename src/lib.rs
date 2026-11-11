@@ -59,4 +59,4 @@ mod shard_map;
 mod shard_set;
 
 pub use shard_map::ShardMap;
-pub use shard_set::ShardSet;
+pub use shard_set::{SetRef, ShardSet};

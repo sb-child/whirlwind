@@ -25,7 +25,7 @@
 //!
 use std::hash::{BuildHasher, Hash, RandomState};
 
-use crate::shard_map::ShardMap;
+use crate::{mapref::MapRef, shard_map::ShardMap};
 
 /// A concurrent set based on a [`ShardMap`] with values of `()`.
 ///
@@ -54,6 +54,14 @@ pub struct ShardSet<T, S = RandomState> {
     inner: ShardMap<T, (), S>,
 }
 
+impl<T, S> Clone for ShardSet<T, S> {
+    fn clone(&self) -> Self {
+        Self {
+            inner: self.inner.clone(),
+        }
+    }
+}
+
 impl<T: Eq + Hash + 'static> Default for ShardSet<T, RandomState> {
     fn default() -> Self {
         Self::new()
@@ -70,6 +78,21 @@ impl<T: Eq + Hash + 'static> ShardSet<T, RandomState> {
     pub fn new_with_shards(shards: usize) -> Self {
         Self {
             inner: ShardMap::with_shards(shards),
+        }
+    }
+
+    /// Creates a new `ShardSet` with the default hasher and space for at least `capacity` values.
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self {
+            inner: ShardMap::with_capacity(capacity),
+        }
+    }
+
+    /// Creates a new `ShardSet` with the default hasher, `shards` shards, and space for at least
+    /// `capacity` values.
+    pub fn with_shards_and_capacity(shards: usize, capacity: usize) -> Self {
+        Self {
+            inner: ShardMap::with_shards_and_capacity(shards, capacity),
         }
     }
 }
@@ -91,9 +114,32 @@ where
         }
     }
 
+    /// Creates a new `ShardSet` with the provided hasher `S` and space for at least `capacity`
+    /// values.
+    pub fn with_capacity_and_hasher(capacity: usize, hasher: S) -> Self {
+        Self {
+            inner: ShardMap::with_capacity_and_hasher(capacity, hasher),
+        }
+    }
+
+    /// Creates a new `ShardSet` with the provided hasher `S`, `shards` shards, and space for at
+    /// least `capacity` values.
+    pub fn with_shards_and_capacity_and_hasher(shards: usize, capacity: usize, hasher: S) -> Self {
+        Self {
+            inner: ShardMap::with_shards_and_capacity_and_hasher(shards, capacity, hasher),
+        }
+    }
+
     /// Inserts a value into the set.
-    pub async fn insert(&self, value: T) {
-        self.inner.insert(value, ()).await;
+    ///
+    /// Returns `true` if the value was not already present in the set.
+    pub async fn insert(&self, value: T) -> bool {
+        self.inner.insert(value, ()).await.is_none()
+    }
+
+    /// Returns a reference to the value in the set, if it is present.
+    pub async fn get<'a>(&'a self, value: &'a T) -> Option<SetRef<'a, T>> {
+        self.inner.get(value).await.map(SetRef::new)
     }
 
     /// Returns `true` if the set contains the specified value.
@@ -101,7 +147,21 @@ where
         self.inner.contains_key(value).await
     }
 
+    /// Adds a value to the set, returning `true` if the value was already present.
+    ///
+    /// This is equivalent to [`HashSet::replace`](std::collections::HashSet::replace).
+    pub async fn replace(&self, value: T) -> bool {
+        self.inner.insert(value, ()).await.is_some()
+    }
+
+    /// Removes a value from the set and returns it, if it was present.
+    pub async fn take(&self, value: &T) -> Option<T> {
+        self.inner.remove_entry(value).await.map(|(value, _)| value)
+    }
+
     /// Removes a value from the set.
+    ///
+    /// Returns `true` if the value was present in the set.
     pub async fn remove(&self, value: &T) -> bool {
         self.inner.remove(value).await.is_some()
     }
@@ -122,7 +182,7 @@ where
     }
 
     /// Returns an iterator over the values in the set.
-    pub async fn iter<'a>(&'a self) -> impl Iterator<Item = &'a T> {
+    pub async fn iter(&self) -> impl Iterator<Item = &T> {
         self.inner.keys().await
     }
 }
@@ -148,5 +208,38 @@ where
         Self {
             inner: iter.into_iter().map(|value| (value, ())).collect(),
         }
+    }
+}
+
+/// A reference to a value in a [`ShardSet`].
+///
+/// Holds a shared (read-only) lock on the shard associated with the value. Dropping this
+/// reference will release the lock.
+pub struct SetRef<'a, T> {
+    inner: MapRef<'a, T, ()>,
+}
+
+impl<'a, T> SetRef<'a, T>
+where
+    T: Eq + std::hash::Hash,
+{
+    pub(crate) fn new(inner: MapRef<'a, T, ()>) -> Self {
+        Self { inner }
+    }
+
+    /// Returns a reference to the value.
+    pub fn value(&self) -> &T {
+        self.inner.key()
+    }
+}
+
+impl<T> std::ops::Deref for SetRef<'_, T>
+where
+    T: Eq + std::hash::Hash,
+{
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        self.inner.key()
     }
 }

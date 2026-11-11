@@ -168,8 +168,7 @@ where
         }
         let shard_capacity = cap / shards;
 
-        let shards = std::iter::repeat(())
-            .take(shards)
+        let shards = std::iter::repeat_n((), shards)
             .map(|_| CachePadded::new(Shard::with_capacity(shard_capacity)))
             .collect();
 
@@ -358,12 +357,35 @@ where
     /// });
     /// ```
     pub async fn remove(&self, key: &K) -> Option<V> {
+        self.remove_entry(key).await.map(|(_, value)| value)
+    }
+
+    /// Removes a key from the map and returns the stored key-value pair.
+    /// If the key is not in the map, `None` is returned.
+    ///
+    /// # Example
+    /// ```
+    /// use tokio::runtime::Runtime;
+    /// use std::sync::Arc;
+    /// use whirlwind::ShardMap;
+    ///
+    /// let rt = Runtime::new().unwrap();
+    /// let map = Arc::new(ShardMap::new());
+    ///
+    /// rt.block_on(async {
+    ///     map.insert("foo", "bar").await;
+    ///
+    ///     assert_eq!(map.remove_entry(&"foo").await, Some(("foo", "bar")));
+    ///     assert_eq!(map.remove_entry(&"foo").await, None);
+    /// });
+    /// ```
+    pub async fn remove_entry(&self, key: &K) -> Option<(K, V)> {
         let (shard, hash) = self.shard(key);
 
         match shard.write().await.find_entry(hash, |(k, _)| k == key) {
             Ok(occupied) => {
-                let ((_, v), _) = occupied.remove();
-                Some(v)
+                let (entry, _) = occupied.remove();
+                Some(entry)
             }
             _ => None,
         }
@@ -523,7 +545,7 @@ where
     ///     assert!(keys.contains(&"baz"));
     /// });
     /// ```
-    pub async fn keys<'a>(&'a self) -> impl Iterator<Item = &'a K> {
+    pub async fn keys(&self) -> impl Iterator<Item = &K> {
         self.iter().await.map(|(k, _)| k)
     }
 
@@ -560,7 +582,7 @@ where
     ///     assert!(values.contains(&"qux"));
     /// });
     /// ```
-    pub async fn values<'a>(&'a self) -> impl Iterator<Item = &'a V> {
+    pub async fn values(&self) -> impl Iterator<Item = &V> {
         self.iter().await.map(|(_, v)| v)
     }
 
@@ -637,7 +659,7 @@ where
     ///     assert_eq!(map.get(&"baz").await.unwrap().value(), &"qux");
     /// });
     /// ```
-    pub async fn values_mut<'a>(&'a self) -> impl Iterator<Item = &'a mut V> {
+    pub async fn values_mut(&self) -> impl Iterator<Item = &mut V> {
         self.iter_mut().await.map(|(_, v)| v)
     }
 }
