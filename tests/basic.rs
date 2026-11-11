@@ -235,6 +235,18 @@ async fn test_shardset_capacity() {
 }
 
 #[tokio::test]
+async fn test_shardset_constructors() {
+    let set: ShardSet<&str> = ShardSet::with_shards(4);
+    assert!(set.is_empty().await);
+
+    let set: ShardSet<&str> = ShardSet::with_hasher(RandomState::new());
+    assert!(set.is_empty().await);
+
+    let set: ShardSet<&str> = ShardSet::with_shards_and_hasher(4, RandomState::new());
+    assert!(set.is_empty().await);
+}
+
+#[tokio::test]
 async fn test_shardset_insert_returns_bool() {
     let set = ShardSet::new();
     assert!(set.insert("foo").await);

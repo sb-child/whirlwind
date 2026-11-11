@@ -75,7 +75,7 @@ impl<T: Eq + Hash + 'static> ShardSet<T, RandomState> {
         }
     }
 
-    pub fn new_with_shards(shards: usize) -> Self {
+    pub fn with_shards(shards: usize) -> Self {
         Self {
             inner: ShardMap::with_shards(shards),
         }
@@ -102,13 +102,13 @@ where
     T: Eq + std::hash::Hash + 'static,
     S: BuildHasher,
 {
-    pub fn new_with_hasher(hasher: S) -> Self {
+    pub fn with_hasher(hasher: S) -> Self {
         Self {
             inner: ShardMap::with_hasher(hasher),
         }
     }
 
-    pub fn new_with_shards_and_hasher(shards: usize, hasher: S) -> Self {
+    pub fn with_shards_and_hasher(shards: usize, hasher: S) -> Self {
         Self {
             inner: ShardMap::with_shards_and_hasher(shards, hasher),
         }
