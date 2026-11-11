@@ -642,6 +642,51 @@ where
     }
 }
 
+impl<K, V, S> FromIterator<(K, V)> for ShardMap<K, V, S>
+where
+    K: Eq + std::hash::Hash + 'static,
+    V: 'static,
+    S: BuildHasher + Default,
+{
+    /// Creates a `ShardMap` from an iterator of key-value pairs.
+    ///
+    /// If the iterator contains duplicate keys, the last value for a key wins.
+    ///
+    /// # Example
+    /// ```
+    /// use whirlwind::ShardMap;
+    ///
+    /// let rt = tokio::runtime::Runtime::new().unwrap();
+    /// rt.block_on(async {
+    ///     let map: ShardMap<_, _> = [("foo", "bar"), ("baz", "qux")].into_iter().collect();
+    ///     assert_eq!(map.len().await, 2);
+    /// });
+    /// ```
+    fn from_iter<I: IntoIterator<Item = (K, V)>>(iter: I) -> Self {
+        let iter = iter.into_iter();
+        let (lower, _) = iter.size_hint();
+        let mut map = Self::with_capacity_and_hasher(lower, S::default());
+
+        // The map was just created and is uniquely owned, so we can populate the shards
+        // directly without taking any locks.
+        let inner = Arc::get_mut(&mut map.inner).expect("map was just created");
+        for (key, value) in iter {
+            let hash = inner.hasher.hash_one(&key);
+            let shard = &mut inner.shards[((hash << 7) >> inner.shift) as usize];
+            let table = shard.get_mut();
+
+            match table.entry(hash, |(k, _)| k == &key, |(k, _)| inner.hasher.hash_one(k)) {
+                Entry::Occupied(mut entry) => entry.get_mut().1 = value,
+                Entry::Vacant(entry) => {
+                    entry.insert((key, value));
+                }
+            }
+        }
+
+        map
+    }
+}
+
 pub struct ShardIter<'a, K, V> {
     _guards: Vec<ShardReader<'a, K, V>>,
     iters: Vec<Iter<'a, (K, V)>>,

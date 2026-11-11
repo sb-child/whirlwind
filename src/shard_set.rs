@@ -126,3 +126,27 @@ where
         self.inner.keys().await
     }
 }
+
+impl<T, S> FromIterator<T> for ShardSet<T, S>
+where
+    T: Eq + std::hash::Hash + 'static,
+    S: BuildHasher + Default,
+{
+    /// Creates a `ShardSet` from an iterator of values.
+    ///
+    /// # Example
+    /// ```
+    /// use whirlwind::ShardSet;
+    ///
+    /// let rt = tokio::runtime::Runtime::new().unwrap();
+    /// rt.block_on(async {
+    ///     let set: ShardSet<_> = ["foo", "bar", "foo"].into_iter().collect();
+    ///     assert_eq!(set.len().await, 2);
+    /// });
+    /// ```
+    fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
+        Self {
+            inner: iter.into_iter().map(|value| (value, ())).collect(),
+        }
+    }
+}

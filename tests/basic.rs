@@ -177,6 +177,24 @@ async fn test_shardmap_iter_mut_empty() {
 }
 
 #[tokio::test]
+async fn test_shardmap_from_iter() {
+    let map: ShardMap<_, _> = [("foo", "bar"), ("baz", "qux"), ("foo", "new")]
+        .into_iter()
+        .collect();
+    assert_eq!(map.len().await, 2);
+    assert_eq!(map.get(&"foo").await.unwrap().value(), &"new");
+    assert_eq!(map.get(&"baz").await.unwrap().value(), &"qux");
+}
+
+#[tokio::test]
+async fn test_shardset_from_iter() {
+    let set: ShardSet<_> = ["foo", "bar", "foo"].into_iter().collect();
+    assert_eq!(set.len().await, 2);
+    assert!(set.contains(&"foo").await);
+    assert!(set.contains(&"bar").await);
+}
+
+#[tokio::test]
 async fn test_shardset_iter() {
     let set = ShardSet::new();
     set.insert("foo").await;
