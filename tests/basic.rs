@@ -1,4 +1,5 @@
 use std::hash::RandomState;
+use std::sync::Arc;
 use whirlwind::*;
 
 #[tokio::test]
@@ -325,4 +326,34 @@ async fn test_get_with_local_key_binding() {
             assert_eq!(*entry.value(), i);
         }
     }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn test_concurrent_reads_and_writes() {
+    let map = Arc::new(ShardMap::new());
+
+    for i in 0..64u64 {
+        map.insert(i, i).await;
+    }
+
+    let mut handles = Vec::new();
+    for task in 0..8u64 {
+        let map = Arc::clone(&map);
+        handles.push(tokio::spawn(async move {
+            for i in 0..500u64 {
+                let key = (i + task * 7919) % 64;
+                let value = map.get(&key).await.map(|v| *v.value());
+                assert!(value.is_some());
+
+                map.insert(1_000 + task * 1_000 + i, i).await;
+            }
+        }));
+    }
+
+    for handle in handles {
+        handle.await.unwrap();
+    }
+
+    assert!(!map.is_empty().await);
+    assert_eq!(map.len().await, 64 + 8 * 500);
 }

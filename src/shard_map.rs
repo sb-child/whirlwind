@@ -96,7 +96,7 @@ where
 
 #[inline(always)]
 fn calculate_shard_count() -> usize {
-    (std::thread::available_parallelism().map_or(1, usize::from) * 4).next_power_of_two()
+    (std::thread::available_parallelism().map_or(1, usize::from) * 8).next_power_of_two()
 }
 
 #[inline(always)]
@@ -216,21 +216,17 @@ where
         let (shard, hash) = self.shard(&key);
         let mut writer = shard.write().await;
 
-        let (old, slot) = match writer.entry(
+        match writer.entry(
             hash,
             |(k, _)| k == &key,
             |(k, _)| self.inner.hasher.hash_one(k),
         ) {
-            Entry::Occupied(entry) => {
-                let ((_, old), slot) = entry.remove();
-                (Some(old), slot)
+            Entry::Occupied(mut entry) => Some(std::mem::replace(entry.get_mut(), (key, value)).1),
+            Entry::Vacant(slot) => {
+                slot.insert((key, value));
+                None
             }
-            Entry::Vacant(slot) => (None, slot),
-        };
-
-        slot.insert((key, value));
-
-        old
+        }
     }
 
     /// Returns a reference to the value associated with the key.
@@ -419,7 +415,7 @@ where
 
     /// Returns `true` if the map is empty.
     ///
-    /// This is equivalent to `map.len().await == 0`.
+    /// Unlike `map.len().await == 0`, this stops at the first non-empty shard.
     ///
     /// # Example
     /// ```
@@ -441,7 +437,12 @@ where
     ///
     /// ```
     pub async fn is_empty(&self) -> bool {
-        self.len().await == 0
+        for shard in self.inner.iter() {
+            if !shard.read().await.is_empty() {
+                return false;
+            }
+        }
+        true
     }
 
     /// Clears the map, removing all key-value pairs.

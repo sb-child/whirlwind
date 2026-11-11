@@ -20,11 +20,22 @@ where
     }
 
     pub async fn write<'a>(&'a self) -> ShardWriter<'a, K, V> {
-        self.data.write().await
+        // Fast path: take the lock without joining the fair wait queue. Only fall
+        // back to `write().await` when the shard is actually contended.
+        match self.data.try_write() {
+            Ok(guard) => guard,
+            Err(_) => self.data.write().await,
+        }
     }
 
     pub async fn read<'a>(&'a self) -> ShardReader<'a, K, V> {
-        self.data.read().await
+        // Fast path: take the lock without joining the fair wait queue. This
+        // avoids the reader convoy caused by a single queued writer, at the cost
+        // of not guaranteeing FIFO ordering between readers and writers.
+        match self.data.try_read() {
+            Ok(guard) => guard,
+            Err(_) => self.data.read().await,
+        }
     }
 }
 

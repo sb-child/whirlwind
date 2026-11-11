@@ -173,7 +173,7 @@ where
 
     /// Returns `true` if the set is empty.
     pub async fn is_empty(&self) -> bool {
-        self.inner.len().await == 0
+        self.inner.is_empty().await
     }
 
     /// Clears the set, removing all values.
