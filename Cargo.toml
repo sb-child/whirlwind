@@ -3,13 +3,11 @@ name = "whirlwind"
 description = "Collection of thread-safe, asynchronous data structures."
 authors = ["Will Hopkins <will@fortress.build>"]
 version = "0.1.1"
-edition = "2021"
-readme = "README.md"
+edition = "2024"
 repository = "https://github.com/fortress-build/whirlwind"
 license = "Apache-2.0"
 keywords = ["async", "hashmap", "sharding"]
 categories = ["asynchronous", "concurrency", "data-structures"]
-
 
 [dependencies]
 crossbeam-utils = "0.8.23"
