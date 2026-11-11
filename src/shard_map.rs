@@ -94,9 +94,23 @@ where
     }
 }
 
+/// The smallest shard count a [`ShardMap`] can be created with.
+///
+/// `shard_for_hash` derives its shift from the shard count, so `0` and `1` would
+/// shift by the full pointer width and index out of bounds.
+const MIN_SHARD_COUNT: usize = 2;
+
 #[inline(always)]
 fn calculate_shard_count() -> usize {
-    (std::thread::available_parallelism().map_or(1, usize::from) * 8).next_power_of_two()
+    // Panics on an unsupported shard count are not acceptable here, so make sure
+    // every step saturates instead of overflowing (and keep the result valid even
+    // if `next_power_of_two` wraps to zero in release mode).
+    let parallelism = std::thread::available_parallelism().map_or(1, usize::from);
+    parallelism
+        .max(1)
+        .saturating_mul(8)
+        .next_power_of_two()
+        .max(MIN_SHARD_COUNT)
 }
 
 #[inline(always)]
@@ -158,13 +172,19 @@ where
     /// Creates a new `ShardMap` with the provided hasher `S`, `shards` shards, and space for at
     /// least `cap` elements.
     pub fn with_shards_and_capacity_and_hasher(shards: usize, mut cap: usize, hasher: S) -> Self {
-        debug_assert!(shards > 1);
-        debug_assert!(shards.is_power_of_two());
+        assert!(
+            shards >= MIN_SHARD_COUNT,
+            "shard count must be at least {MIN_SHARD_COUNT}, got {shards}"
+        );
+        assert!(
+            shards.is_power_of_two(),
+            "shard count must be a power of two, got {shards}"
+        );
 
         let shift = ptr_size_bits() - (shards.trailing_zeros() as usize);
 
         if cap != 0 {
-            cap = (cap + (shards - 1)) & !(shards - 1);
+            cap = cap.saturating_add(shards - 1) & !(shards - 1);
         }
         let shard_capacity = cap / shards;
 

@@ -357,3 +357,39 @@ async fn test_concurrent_reads_and_writes() {
     assert!(!map.is_empty().await);
     assert_eq!(map.len().await, 64 + 8 * 500);
 }
+
+#[tokio::test]
+async fn test_shardmap_min_shards() {
+    let map = ShardMap::with_shards(2);
+    for i in 0..100u64 {
+        map.insert(i, i).await;
+    }
+    for i in 0..100u64 {
+        assert_eq!(map.get(&i).await.map(|v| *v.value()), Some(i));
+    }
+    assert_eq!(map.len().await, 100);
+}
+
+#[test]
+#[should_panic(expected = "shard count must be at least 2")]
+fn test_shardmap_zero_shards_panics() {
+    let _ = ShardMap::<u64, u64>::with_shards(0);
+}
+
+#[test]
+#[should_panic(expected = "shard count must be at least 2")]
+fn test_shardmap_one_shard_panics() {
+    let _ = ShardMap::<u64, u64>::with_shards(1);
+}
+
+#[test]
+#[should_panic(expected = "shard count must be a power of two")]
+fn test_shardmap_non_power_of_two_shards_panics() {
+    let _ = ShardMap::<u64, u64>::with_shards(3);
+}
+
+#[test]
+#[should_panic(expected = "shard count must be a power of two")]
+fn test_shardset_non_power_of_two_shards_panics() {
+    let _ = ShardSet::<u64>::with_shards(6);
+}
