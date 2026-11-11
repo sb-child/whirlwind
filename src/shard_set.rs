@@ -138,7 +138,7 @@ where
     }
 
     /// Returns a reference to the value in the set, if it is present.
-    pub async fn get<'a>(&'a self, value: &'a T) -> Option<SetRef<'a, T>> {
+    pub async fn get<'a>(&'a self, value: &T) -> Option<SetRef<'a, T>> {
         self.inner.get(value).await.map(SetRef::new)
     }
 

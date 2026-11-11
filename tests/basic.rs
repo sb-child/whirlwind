@@ -290,3 +290,39 @@ async fn test_shardset_iter() {
     assert!(set.contains(&"foo").await);
     assert!(set.contains(&"bar").await);
 }
+
+#[tokio::test]
+async fn test_get_with_local_key_binding() {
+    let map = ShardMap::new();
+    for i in 0..10u64 {
+        map.insert(i, i).await;
+    }
+
+    // The key binding is a local that outlives neither the map nor the returned
+    // reference, which must still compile.
+    for i in 0..10u64 {
+        let key = i;
+        if let Some(value) = map.get(&key).await {
+            assert_eq!(*value.value(), i);
+        }
+    }
+
+    for i in 0..10u64 {
+        let key = i;
+        if let Some(mut value) = map.get_mut(&key).await {
+            *value.value_mut() += 1;
+        }
+    }
+
+    let set = ShardSet::new();
+    for i in 0..10u64 {
+        set.insert(i).await;
+    }
+
+    for i in 0..10u64 {
+        let value = i;
+        if let Some(entry) = set.get(&value).await {
+            assert_eq!(*entry.value(), i);
+        }
+    }
+}
